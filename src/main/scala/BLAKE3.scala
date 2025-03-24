@@ -1,4 +1,4 @@
-package com.omarjatoi.blake3
+package com.omarjatoi
 
 /** This is a port of the BLAKE3 reference implementation to Scala 3. The
   * original reference implementation is used for testing and as a readable
