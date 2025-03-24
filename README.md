@@ -2,6 +2,15 @@
 
 This is a pure Scala port of the BLAKE3 [reference implementation](https://github.com/BLAKE3-team/BLAKE3/blob/master/reference_impl/reference_impl.rs).
 
+## Usage
+
+```scala
+val hasher = Blake3.Hasher()
+hasher.update("scala".getBytes)
+val hash = new Array[Byte](32)
+hasher.finalize(hash)
+```
+
 ## Development
 
 Install [Scala](https://scala-lang.org) and [sbt](https://www.scala-sbt.org/), preferably using [Couriser](https://get-coursier.io/).
