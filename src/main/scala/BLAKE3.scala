@@ -1,21 +1,22 @@
-/**
- * This is a port of the BLAKE3 reference implementation to Scala 3.
- * The original reference implementation is used for testing and as a readable
- * example of the algorithms involved.
- *
- * Example usage:
- *
- * ```scala
- * val hasher = Blake3.Hasher()
- * hasher.update("abc".getBytes)
- * hasher.update("def".getBytes)
- * val hash = new Array[Byte](32)
- * hasher.finalize(hash)
- * val extendedHash = new Array[Byte](500)
- * hasher.finalize(extendedHash)
- * assert(hash sameElements extendedHash.take(32))
- * ```
- */
+package com.omarjatoi.blake3
+
+/** This is a port of the BLAKE3 reference implementation to Scala 3. The
+  * original reference implementation is used for testing and as a readable
+  * example of the algorithms involved.
+  *
+  * Example usage:
+  *
+  * ```scala
+  * val hasher = Blake3.Hasher()
+  * hasher.update("abc".getBytes)
+  * hasher.update("def".getBytes)
+  * val hash = new Array[Byte](32)
+  * hasher.finalize(hash)
+  * val extendedHash = new Array[Byte](500)
+  * hasher.finalize(extendedHash)
+  * assert(hash sameElements extendedHash.take(32))
+  * ```
+  */
 object Blake3:
   // Constants
   val OutLen: Int = 32
@@ -34,8 +35,7 @@ object Blake3:
     val DeriveKeyContext: Flag = 1 << 5
     val DeriveKeyMaterial: Flag = 1 << 6
 
-    extension (f: Flag)
-      def |(other: Flag): Flag = f | other
+    extension (f: Flag) def |(other: Flag): Flag = f | other
 
     given Conversion[Flag, Int] = identity
 
@@ -43,8 +43,8 @@ object Blake3:
 
   // IV constants
   val IV: IArray[Int] = IArray(
-    0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A,
-    0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c,
+    0x1f83d9ab, 0x5be0cd19
   )
 
   // Message permutation indices
@@ -53,15 +53,23 @@ object Blake3:
   )
 
   /** The mixing function, G, which mixes either a column or a diagonal. */
-  def g(state: Array[Int], a: Int, b: Int, c: Int, d: Int, mx: Int, my: Int): Unit =
+  def g(
+      state: Array[Int],
+      a: Int,
+      b: Int,
+      c: Int,
+      d: Int,
+      mx: Int,
+      my: Int
+  ): Unit =
     // Important: Use wrapping addition to match the original implementation
-    state(a) = (state(a) + state(b)).&(0xFFFFFFFF) + mx
+    state(a) = (state(a) + state(b)).&(0xffffffff) + mx
     state(d) = Integer.rotateRight(state(d) ^ state(a), 16)
-    state(c) = (state(c) + state(d)).&(0xFFFFFFFF)
+    state(c) = (state(c) + state(d)).&(0xffffffff)
     state(b) = Integer.rotateRight(state(b) ^ state(c), 12)
-    state(a) = (state(a) + state(b)).&(0xFFFFFFFF) + my
+    state(a) = (state(a) + state(b)).&(0xffffffff) + my
     state(d) = Integer.rotateRight(state(d) ^ state(a), 8)
-    state(c) = (state(c) + state(d)).&(0xFFFFFFFF)
+    state(c) = (state(c) + state(d)).&(0xffffffff)
     state(b) = Integer.rotateRight(state(b) ^ state(c), 7)
 
   /** Applies one round of the BLAKE3 compression function. */
@@ -80,27 +88,37 @@ object Blake3:
   /** Permutes the message words according to the permutation table. */
   def permute(m: Array[Int]): Unit =
     val permuted = Array.ofDim[Int](16)
-    for i <- 0 until 16 do
-      permuted(i) = m(MsgPermutation(i))
+    for i <- 0 until 16 do permuted(i) = m(MsgPermutation(i))
     Array.copy(permuted, 0, m, 0, 16)
 
-  /**
-   * Compresses a block of data using the BLAKE3 compression function.
-   */
+  /** Compresses a block of data using the BLAKE3 compression function.
+    */
   def compress(
-    chainingValue: Array[Int],
-    blockWords: Array[Int],
-    counter: Long,
-    blockLen: Int,
-    flags: Flag
+      chainingValue: Array[Int],
+      blockWords: Array[Int],
+      counter: Long,
+      blockLen: Int,
+      flags: Flag
   ): Array[Int] =
     val counterLow = counter.toInt
     val counterHigh = (counter >> 32).toInt
     val state = Array(
-      chainingValue(0), chainingValue(1), chainingValue(2), chainingValue(3),
-      chainingValue(4), chainingValue(5), chainingValue(6), chainingValue(7),
-      IV(0), IV(1), IV(2), IV(3),
-      counterLow, counterHigh, blockLen, flags
+      chainingValue(0),
+      chainingValue(1),
+      chainingValue(2),
+      chainingValue(3),
+      chainingValue(4),
+      chainingValue(5),
+      chainingValue(6),
+      chainingValue(7),
+      IV(0),
+      IV(1),
+      IV(2),
+      IV(3),
+      counterLow,
+      counterHigh,
+      blockLen,
+      flags
     )
     val block = blockWords.clone()
 
@@ -128,7 +146,8 @@ object Blake3:
   def first8Words(compressionOutput: Array[Int]): Array[Int] =
     compressionOutput.take(8)
 
-  /** Converts a byte array to an array of 32-bit words in little-endian format. */
+  /** Converts a byte array to an array of 32-bit words in little-endian format.
+    */
   def wordsFromLittleEndianBytes(bytes: Array[Byte], words: Array[Int]): Unit =
     // Handle full blocks of 4 bytes
     val fullBlocks = bytes.length / 4
@@ -136,39 +155,40 @@ object Blake3:
 
     for i <- 0 until safeBlocks do
       val idx = i * 4
-      words(i) = ((bytes(idx) & 0xFF)
-              | ((bytes(idx + 1) & 0xFF) << 8)
-              | ((bytes(idx + 2) & 0xFF) << 16)
-              | ((bytes(idx + 3) & 0xFF) << 24))
+      words(i) = ((bytes(idx) & 0xff)
+        | ((bytes(idx + 1) & 0xff) << 8)
+        | ((bytes(idx + 2) & 0xff) << 16)
+        | ((bytes(idx + 3) & 0xff) << 24))
 
     // Handle potential partial block at the end
     if fullBlocks < words.length && bytes.length % 4 > 0 then
       var value = 0
       val startIdx = fullBlocks * 4
       for i <- 0 until (bytes.length % 4) do
-        value |= (bytes(startIdx + i) & 0xFF) << (8 * i)
+        value |= (bytes(startIdx + i) & 0xff) << (8 * i)
       words(fullBlocks) = value
 
-  /**
-   * Output represents the state just prior to producing either an 8-word
-   * chaining value or any number of final output bytes.
-   */
+  /** Output represents the state just prior to producing either an 8-word
+    * chaining value or any number of final output bytes.
+    */
   case class Output(
-    inputChainingValue: Array[Int],
-    blockWords: Array[Int],
-    counter: Long,
-    blockLen: Int,
-    flags: Flag
+      inputChainingValue: Array[Int],
+      blockWords: Array[Int],
+      counter: Long,
+      blockLen: Int,
+      flags: Flag
   ):
     /** Produces an 8-word chaining value. */
     def chainingValue(): Array[Int] =
-      first8Words(compress(
-        inputChainingValue,
-        blockWords,
-        counter,
-        blockLen,
-        flags
-      ))
+      first8Words(
+        compress(
+          inputChainingValue,
+          blockWords,
+          counter,
+          blockLen,
+          flags
+        )
+      )
 
     /** Produces any number of output bytes for the root node. */
     def rootOutputBytes(outSlice: Array[Byte]): Unit =
@@ -190,29 +210,32 @@ object Blake3:
           val startIdx = i + j * 4
 
           // Only write bytes that fit within the output slice
-          if startIdx < outSlice.length then outSlice(startIdx) = (word & 0xFF).toByte
-          if startIdx + 1 < outSlice.length then outSlice(startIdx + 1) = ((word >> 8) & 0xFF).toByte
-          if startIdx + 2 < outSlice.length then outSlice(startIdx + 2) = ((word >> 16) & 0xFF).toByte
-          if startIdx + 3 < outSlice.length then outSlice(startIdx + 3) = ((word >> 24) & 0xFF).toByte
+          if startIdx < outSlice.length then
+            outSlice(startIdx) = (word & 0xff).toByte
+          if startIdx + 1 < outSlice.length then
+            outSlice(startIdx + 1) = ((word >> 8) & 0xff).toByte
+          if startIdx + 2 < outSlice.length then
+            outSlice(startIdx + 2) = ((word >> 16) & 0xff).toByte
+          if startIdx + 3 < outSlice.length then
+            outSlice(startIdx + 3) = ((word >> 24) & 0xff).toByte
 
         outputBlockCounter += 1
         i += blockSize
 
-  /**
-   * ChunkState manages the state for hashing one chunk of input data.
-   */
+  /** ChunkState manages the state for hashing one chunk of input data.
+    */
   class ChunkState(
-    var chainingValue: Array[Int],
-    val chunkCounter: Long,
-    var block: Array[Byte],
-    var blockLen: Int,
-    var blocksCompressed: Int,
-    val flags: Flag
+      var chainingValue: Array[Int],
+      val chunkCounter: Long,
+      var block: Array[Byte],
+      var blockLen: Int,
+      var blocksCompressed: Int,
+      val flags: Flag
   ):
     /** Creates a new ChunkState with the given parameters. */
     def this(keyWords: Array[Int], chunkCounter: Long, flags: Flag) =
       this(
-        keyWords.clone(),  // Clone to prevent inadvertent modification
+        keyWords.clone(), // Clone to prevent inadvertent modification
         chunkCounter,
         Array.ofDim[Byte](BlockLen),
         0,
@@ -234,13 +257,15 @@ object Blake3:
         if blockLen == BlockLen then
           val blockWords = Array.ofDim[Int](16)
           wordsFromLittleEndianBytes(block, blockWords)
-          chainingValue = first8Words(compress(
-            chainingValue,
-            blockWords,
-            chunkCounter,
-            BlockLen,
-            flags | startFlag
-          ))
+          chainingValue = first8Words(
+            compress(
+              chainingValue,
+              blockWords,
+              chunkCounter,
+              BlockLen,
+              flags | startFlag
+            )
+          )
           blocksCompressed += 1
           block = Array.ofDim[Byte](BlockLen)
           blockLen = 0
@@ -266,10 +291,10 @@ object Blake3:
 
   /** Creates an Output for a parent node in the Merkle tree. */
   def parentOutput(
-    leftChildCv: Array[Int],
-    rightChildCv: Array[Int],
-    keyWords: Array[Int],
-    flags: Flag
+      leftChildCv: Array[Int],
+      rightChildCv: Array[Int],
+      keyWords: Array[Int],
+      flags: Flag
   ): Output =
     val blockWords = Array.ofDim[Int](16)
     System.arraycopy(leftChildCv, 0, blockWords, 0, 8)
@@ -284,22 +309,21 @@ object Blake3:
 
   /** Computes the chaining value for a parent node in the Merkle tree. */
   def parentCv(
-    leftChildCv: Array[Int],
-    rightChildCv: Array[Int],
-    keyWords: Array[Int],
-    flags: Flag
+      leftChildCv: Array[Int],
+      rightChildCv: Array[Int],
+      keyWords: Array[Int],
+      flags: Flag
   ): Array[Int] =
     parentOutput(leftChildCv, rightChildCv, keyWords, flags).chainingValue()
 
-  /**
-   * An incremental hasher that can accept any number of writes.
-   */
+  /** An incremental hasher that can accept any number of writes.
+    */
   class Hasher private (
-    var chunkState: ChunkState,
-    val keyWords: Array[Int],
-    var cvStack: Array[Array[Int]], // Space for subtree chaining values
-    var cvStackLen: Int,
-    val flags: Flag
+      var chunkState: ChunkState,
+      val keyWords: Array[Int],
+      var cvStack: Array[Array[Int]], // Space for subtree chaining values
+      var cvStackLen: Int,
+      val flags: Flag
   ):
     /** Creates a new Hasher with the given parameters. */
     private def this(keyWords: Array[Int], flags: Flag) =
@@ -322,7 +346,10 @@ object Blake3:
       cvStack(cvStackLen).clone()
 
     /** Adds a chunk chaining value to the Merkle tree. */
-    private def addChunkChainingValue(newCv: Array[Int], totalChunks: Long): Unit =
+    private def addChunkChainingValue(
+        newCv: Array[Int],
+        totalChunks: Long
+    ): Unit =
       var cv = newCv.clone()
       var chunks = totalChunks
 
