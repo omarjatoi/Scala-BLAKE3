@@ -1,206 +1,268 @@
-// For more information on writing tests, see
-// https://scalameta.org/munit/docs/getting-started.html
-class Blake3Suite extends munit.FunSuite {
+import java.io.{File, FileInputStream}
+import scala.io.Source
+import scala.util.Using
+
+class Blake3TestVectors extends munit.FunSuite {
   import Blake3._
+  import upickle.default._
 
-  // Helper function to convert hex string to byte array
-  def hexToBytes(hex: String): Array[Byte] = {
-    hex.grouped(2).map(hexByte => Integer.parseInt(hexByte, 16).toByte).toArray
-  }
+  // Constants from the original Rust code
+  val BlockLen: Int = 64
+  val ChunkLen: Int = 1024
+  val OutputLen: Int = 2 * BlockLen + 3 // 131 bytes
 
-  // Helper function to convert byte array to hex string
-  def bytesToHex(bytes: Array[Byte]): String = {
-    bytes.map(b => String.format("%02x", Byte.box(b))).mkString
-  }
+  // Define the case classes for the test vectors JSON
+  case class Case(
+      input_len: Int,
+      hash: String,
+      keyed_hash: String,
+      derive_key: String
+  )
 
-  // Test vectors from the BLAKE3 spec
-  // https://github.com/BLAKE3-team/BLAKE3-specs/blob/master/test_vectors/test_vectors.json
-  test("BLAKE3 - empty input") {
-    val hasher = Hasher()
-    val hash = Array.ofDim[Byte](32)
-    hasher.finalize(hash)
+  case class Cases(
+      _comment: String,
+      key: String,
+      context_string: String,
+      cases: Seq[Case]
+  )
 
-    val expected = hexToBytes(
-      "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
-    )
-    assertEquals(bytesToHex(hash), bytesToHex(expected))
-  }
+  // JSON reader for the test vectors
+  implicit val caseRW: ReadWriter[Case] = macroRW
+  implicit val casesRW: ReadWriter[Cases] = macroRW
 
-  test("BLAKE3 - 'abc' input") {
-    val hasher = Hasher()
-    hasher.update("abc".getBytes)
-    val hash = Array.ofDim[Byte](32)
-    hasher.finalize(hash)
-
-    val expected = hexToBytes(
-      "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85"
-    )
-    assertEquals(bytesToHex(hash), bytesToHex(expected))
-  }
-
-  test("BLAKE3 - multiple updates") {
-    val hasher = Hasher()
-    hasher.update("a".getBytes)
-    hasher.update("b".getBytes)
-    hasher.update("c".getBytes)
-    val hash = Array.ofDim[Byte](32)
-    hasher.finalize(hash)
-
-    val expected = hexToBytes(
-      "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85"
-    )
-    assertEquals(bytesToHex(hash), bytesToHex(expected))
-  }
-
-  test("BLAKE3 - long input (crosses chunk boundary)") {
-    val hasher = Hasher()
-    // Create a 1025-byte array filled with 'a' (ASCII 97)
-    val input = Array.fill[Byte](1025)(97)
-    hasher.update(input)
-    val hash = Array.ofDim[Byte](32)
-    hasher.finalize(hash)
-
-    // This is actually the hash for 1025 'a' characters, verified with the reference implementation
-    val expected = hexToBytes(
-      "c59d2e12583df14d951e757a42f1734d355c8c5b1db6b6a33ab2bfabeed40c7d"
-    )
-    assertEquals(bytesToHex(hash), bytesToHex(expected))
-  }
-
-  test("BLAKE3 - extended output") {
-    val hasher = Hasher()
-    hasher.update("abc".getBytes)
-
-    // Get a 32-byte hash
-    val hash32 = Array.ofDim[Byte](32)
-    hasher.finalize(hash32)
-
-    // Get a 64-byte extended hash
-    val hash64 = Array.ofDim[Byte](64)
-    hasher.finalize(hash64)
-
-    // First 32 bytes should be identical
-    assertEquals(bytesToHex(hash32), bytesToHex(hash64.take(32)))
-
-    // Update the expected value to match our implementation
-    // The extended output bytes beyond the first 32 bytes don't match the test vector
-    // but are consistent with our implementation
-    val expected64 = hexToBytes(
-      "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85" +
-        "1fb250ae7393f5d02813b65d521a0d492d9ba09cf7ce7f4cffd900f23374bf0b"
-    )
-    assertEquals(bytesToHex(hash64), bytesToHex(expected64))
-  }
-
-  test("BLAKE3 - keyed hash") {
-    val key = Array.ofDim[Byte](32)
-    for (i <- 0 until 32) {
-      key(i) = i.toByte
+  // Load the test vectors from the JSON file
+  def loadTestVectors(): Cases = {
+    val filePath = "src/test/resources/test_vectors.json"
+    val source = Source.fromFile(filePath)
+    try {
+      read[Cases](source.mkString)
+    } finally {
+      source.close()
     }
-
-    val hasher = Hasher.keyed(key)
-    hasher.update("abc".getBytes)
-    val hash = Array.ofDim[Byte](32)
-    hasher.finalize(hash)
-
-    // Update the expected hash to match our implementation
-    val expected = hexToBytes(
-      "6da54495d8152f2bcba87bd7282df70901cdb66b4448ed5f4c7bd2852b8b5532"
-    )
-    assertEquals(bytesToHex(hash), bytesToHex(expected))
   }
 
-  test("BLAKE3 - derive key") {
-    val hasher = Hasher.deriveKey("some context string")
-    hasher.update("abc".getBytes)
-    val hash = Array.ofDim[Byte](32)
-    hasher.finalize(hash)
-
-    // Update to match our implementation
-    val expected = hexToBytes(
-      "0b2234b0ec33678825685cfadd2efad10eb6875cf95aac51646f957c804bf23b"
-    )
-    assertEquals(bytesToHex(hash), bytesToHex(expected))
+  // Helper to convert a hex string to a byte array
+  def hexToBytes(hex: String): Array[Byte] = {
+    hex.grouped(2).map(h => Integer.parseInt(h, 16).toByte).toArray
   }
 
-  test("BLAKE3 - input larger than output") {
-    val hasher = Hasher()
-    hasher.update("abcdefghijklmnopqrstuvwxyz".getBytes)
-    val hash = Array.ofDim[Byte](16) // Only take 16 bytes
-    hasher.finalize(hash)
-
-    // Update to match our implementation
-    val expected = hexToBytes("2468eec8894acfb4e4df3a51ea916ba1")
-    assertEquals(bytesToHex(hash), bytesToHex(expected))
+  // Helper to convert a byte array to a hex string
+  def bytesToHex(bytes: Array[Byte]): String = {
+    bytes.map(b => f"${b & 0xff}%02x").mkString
   }
 
-  test("BLAKE3 - chunk boundary handling") {
-    // Test with input sizes around chunk boundaries
-    val sizes = List(
-      ChunkLen - 1,
-      ChunkLen,
-      ChunkLen + 1,
-      ChunkLen * 2 - 1,
-      ChunkLen * 2,
-      ChunkLen * 2 + 1
-    )
+  // Create a test input pattern as used in the original implementation
+  def paintTestInput(buf: Array[Byte]): Unit = {
+    for (i <- buf.indices) {
+      buf(i) = (i % 251).toByte
+    }
+  }
 
-    for (size <- sizes) {
-      val input = Array.fill[Byte](size)(97) // Fill with 'a'
+  // Test the reference implementation with all input at once
+  def testAllAtOnce(
+      key: Array[Byte],
+      input: Array[Byte],
+      expectedHash: Array[Byte],
+      expectedKeyedHash: Array[Byte],
+      expectedDeriveKey: Array[Byte],
+      testName: String
+  ): Unit = {
+    test(s"$testName - all at once") {
+      // Regular hash
+      val out = Array.ofDim[Byte](expectedHash.length)
       val hasher = Hasher()
       hasher.update(input)
-      val hash = Array.ofDim[Byte](32)
-      hasher.finalize(hash)
+      hasher.finalize(out)
+      assertEquals(bytesToHex(out), bytesToHex(expectedHash))
 
-      // We're not testing against known values here, just making sure it doesn't crash
-      assert(hash.length == 32, s"Hash should be 32 bytes for input size $size")
-      assert(
-        hash.exists(_ != 0),
-        s"Hash should not be all zeros for input size $size"
+      // Keyed hash
+      val keyedOut = Array.ofDim[Byte](expectedKeyedHash.length)
+      val keyedHasher = Hasher.keyed(key)
+      keyedHasher.update(input)
+      keyedHasher.finalize(keyedOut)
+      assertEquals(bytesToHex(keyedOut), bytesToHex(expectedKeyedHash))
+
+      // Derive key
+      val deriveKeyOut = Array.ofDim[Byte](expectedDeriveKey.length)
+      val deriveKeyHasher = Hasher.deriveKey(testVectors.context_string)
+      deriveKeyHasher.update(input)
+      deriveKeyHasher.finalize(deriveKeyOut)
+      assertEquals(bytesToHex(deriveKeyOut), bytesToHex(expectedDeriveKey))
+    }
+  }
+
+  // Test the reference implementation with input one byte at a time
+  def testOneByteAtATime(
+      key: Array[Byte],
+      input: Array[Byte],
+      expectedHash: Array[Byte],
+      expectedKeyedHash: Array[Byte],
+      expectedDeriveKey: Array[Byte],
+      testName: String
+  ): Unit = {
+    test(s"$testName - one byte at a time") {
+      // Regular hash
+      val out = Array.ofDim[Byte](expectedHash.length)
+      val hasher = Hasher()
+      for (b <- input) {
+        hasher.update(Array(b))
+      }
+      hasher.finalize(out)
+      assertEquals(bytesToHex(out), bytesToHex(expectedHash))
+
+      // Keyed hash
+      val keyedOut = Array.ofDim[Byte](expectedKeyedHash.length)
+      val keyedHasher = Hasher.keyed(key)
+      for (b <- input) {
+        keyedHasher.update(Array(b))
+      }
+      keyedHasher.finalize(keyedOut)
+      assertEquals(bytesToHex(keyedOut), bytesToHex(expectedKeyedHash))
+
+      // Derive key
+      val deriveKeyOut = Array.ofDim[Byte](expectedDeriveKey.length)
+      val deriveKeyHasher = Hasher.deriveKey(testVectors.context_string)
+      for (b <- input) {
+        deriveKeyHasher.update(Array(b))
+      }
+      deriveKeyHasher.finalize(deriveKeyOut)
+      assertEquals(bytesToHex(deriveKeyOut), bytesToHex(expectedDeriveKey))
+    }
+  }
+
+  // Load the test vectors
+  val testVectors = loadTestVectors()
+  val key = testVectors.key.getBytes()
+
+  // Generate test cases for each length in the test vectors
+  for (testCase <- testVectors.cases) {
+    val input = Array.ofDim[Byte](testCase.input_len)
+    paintTestInput(input)
+
+    val expectedHash = hexToBytes(testCase.hash)
+    val expectedKeyedHash = hexToBytes(testCase.keyed_hash)
+    val expectedDeriveKey = hexToBytes(testCase.derive_key)
+
+    testAllAtOnce(
+      key,
+      input,
+      expectedHash,
+      expectedKeyedHash,
+      expectedDeriveKey,
+      s"Input length ${testCase.input_len}"
+    )
+
+    // Only run one-byte-at-a-time tests for smaller inputs to avoid excessive test time
+    if (testCase.input_len <= 1024) {
+      testOneByteAtATime(
+        key,
+        input,
+        expectedHash,
+        expectedKeyedHash,
+        expectedDeriveKey,
+        s"Input length ${testCase.input_len}"
       )
     }
   }
 
-  test("BLAKE3 - different hash sizes") {
-    val hasher = Hasher()
-    hasher.update("abc".getBytes)
+  // Test that default output (32 bytes) matches first 32 bytes of extended output
+  test("Default output matches first 32 bytes of extended output") {
+    val input = Array.ofDim[Byte](100)
+    paintTestInput(input)
 
-    for (size <- List(16, 32, 64, 128)) {
-      val hash = Array.ofDim[Byte](size)
-      hasher.finalize(hash)
-      assert(hash.length == size, s"Hash should be $size bytes")
-      assert(
-        hash.exists(_ != 0),
-        s"Hash should not be all zeros for size $size"
-      )
-    }
-  }
-
-  test("BLAKE3 - same input should produce same hash") {
+    // Regular hash
     val hasher1 = Hasher()
-    hasher1.update("test data".getBytes)
+    hasher1.update(input)
+    val hash32 = Array.ofDim[Byte](32)
+    hasher1.finalize(hash32)
+
+    val hasher2 = Hasher()
+    hasher2.update(input)
+    val hashExtended = Array.ofDim[Byte](64)
+    hasher2.finalize(hashExtended)
+
+    assertEquals(bytesToHex(hash32), bytesToHex(hashExtended.take(32)))
+
+    // Keyed hash
+    val keyedHasher1 = Hasher.keyed(key)
+    keyedHasher1.update(input)
+    val keyedHash32 = Array.ofDim[Byte](32)
+    keyedHasher1.finalize(keyedHash32)
+
+    val keyedHasher2 = Hasher.keyed(key)
+    keyedHasher2.update(input)
+    val keyedHashExtended = Array.ofDim[Byte](64)
+    keyedHasher2.finalize(keyedHashExtended)
+
+    assertEquals(
+      bytesToHex(keyedHash32),
+      bytesToHex(keyedHashExtended.take(32))
+    )
+
+    // Derive key
+    val deriveKeyHasher1 = Hasher.deriveKey(testVectors.context_string)
+    deriveKeyHasher1.update(input)
+    val deriveKeyHash32 = Array.ofDim[Byte](32)
+    deriveKeyHasher1.finalize(deriveKeyHash32)
+
+    val deriveKeyHasher2 = Hasher.deriveKey(testVectors.context_string)
+    deriveKeyHasher2.update(input)
+    val deriveKeyHashExtended = Array.ofDim[Byte](64)
+    deriveKeyHasher2.finalize(deriveKeyHashExtended)
+
+    assertEquals(
+      bytesToHex(deriveKeyHash32),
+      bytesToHex(deriveKeyHashExtended.take(32))
+    )
+  }
+
+  // Test multiple updates with the same total content produce the same result
+  test("Multiple updates with same total content produce the same result") {
+    val input = Array.ofDim[Byte](1000)
+    paintTestInput(input)
+
+    // Single update
+    val hasher1 = Hasher()
+    hasher1.update(input)
     val hash1 = Array.ofDim[Byte](32)
     hasher1.finalize(hash1)
 
+    // Multiple updates
     val hasher2 = Hasher()
-    hasher2.update("test data".getBytes)
+    val chunkSize = 100
+    for (i <- 0 until input.length by chunkSize) {
+      val end = math.min(i + chunkSize, input.length)
+      hasher2.update(input.slice(i, end))
+    }
     val hash2 = Array.ofDim[Byte](32)
     hasher2.finalize(hash2)
 
     assertEquals(bytesToHex(hash1), bytesToHex(hash2))
   }
 
-  test("BLAKE3 - different inputs should produce different hashes") {
+  // Test that different inputs produce different hashes
+  test("Different inputs produce different hashes") {
+    val input1 = Array.fill[Byte](100)(1)
+    val input2 = Array.fill[Byte](100)(2)
+
     val hasher1 = Hasher()
-    hasher1.update("test data 1".getBytes)
+    hasher1.update(input1)
     val hash1 = Array.ofDim[Byte](32)
     hasher1.finalize(hash1)
 
     val hasher2 = Hasher()
-    hasher2.update("test data 2".getBytes)
+    hasher2.update(input2)
     val hash2 = Array.ofDim[Byte](32)
     hasher2.finalize(hash2)
 
     assertNotEquals(bytesToHex(hash1), bytesToHex(hash2))
+  }
+
+  // Test key size validation
+  test("Key must be exactly 32 bytes") {
+    val thrown = intercept[IllegalArgumentException] {
+      Hasher.keyed(Array.fill[Byte](31)(0))
+    }
+    assert(thrown.getMessage.contains("must be 32 bytes"))
   }
 }
