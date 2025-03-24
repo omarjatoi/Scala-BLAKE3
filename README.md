@@ -1,6 +1,11 @@
 # Scala-BLAKE3
 
-This is a pure Scala port of the BLAKE3 [reference implementation](https://github.com/BLAKE3-team/BLAKE3/blob/master/reference_impl/reference_impl.rs). Note that this is _not_ an optimized implementation, if you're looking for something fast to use in production, consider using https://github.com/kcrypt/scala-blake3.
+This is a pure Scala port of the BLAKE3 [reference implementation](https://github.com/BLAKE3-team/BLAKE3/blob/master/reference_impl/reference_impl.rs). 
+
+> [!NOTE]  
+> This is **not** an optimized implementation, if you're looking for something fast and stable to use in production, consider using the BLAKE3 implementations in [Bouncy Castle](https://www.bouncycastle.org/) or [Apache Commons Codec](https://commons.apache.org/proper/commons-codec/apidocs/org/apache/commons/codec/digest/Blake3.html).
+>
+> Another optimized Scala implementation exists at https://github.com/kcrypt/scala-blake3.
 
 ## Usage
 
