@@ -4,7 +4,7 @@ lazy val root = project
   .in(file("."))
   .settings(
     name := "BLAKE3",
-    version := "0.1.0-SNAPSHOT",
+    version := "0.1.0",
     scalaVersion := scala3Version,
     libraryDependencies ++= Seq(
       "org.scalameta" %% "munit" % "1.0.0" % Test,
