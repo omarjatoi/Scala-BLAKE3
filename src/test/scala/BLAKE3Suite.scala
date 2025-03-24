@@ -3,7 +3,7 @@ import scala.io.Source
 import scala.util.Using
 
 class Blake3TestVectors extends munit.FunSuite {
-  import Blake3._
+  import com.omarjatoi.blake3.Blake3._
   import upickle.default._
 
   // Constants from the original Rust code
