@@ -1,6 +1,6 @@
 # Scala-BLAKE3
 
-This is a pure Scala port of the BLAKE3 [reference implementation](https://github.com/BLAKE3-team/BLAKE3/blob/master/reference_impl/reference_impl.rs).
+This is a pure Scala port of the BLAKE3 [reference implementation](https://github.com/BLAKE3-team/BLAKE3/blob/master/reference_impl/reference_impl.rs). Note that this is _not_ an optimized implementation, if you're looking for something fast to use in production, consider using https://github.com/kcrypt/scala-blake3.
 
 ## Usage
 
