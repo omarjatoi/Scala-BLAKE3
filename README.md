@@ -1,8 +1,8 @@
 # Scala-BLAKE3
 
-This is a pure Scala port of the BLAKE3 [reference implementation](https://github.com/BLAKE3-team/BLAKE3/blob/master/reference_impl/reference_impl.rs). 
+This is a pure Scala port of the BLAKE3 [reference implementation](https://github.com/BLAKE3-team/BLAKE3/blob/master/reference_impl/reference_impl.rs).
 
-> [!NOTE]  
+> [!NOTE]
 > This is **not** an optimized implementation, if you're looking for something fast and stable to use in production, consider using the BLAKE3 implementations in [Bouncy Castle](https://www.bouncycastle.org/) or [Apache Commons Codec](https://commons.apache.org/proper/commons-codec/apidocs/org/apache/commons/codec/digest/Blake3.html).
 >
 > Another optimized Scala implementation exists at https://github.com/kcrypt/scala-blake3.
@@ -18,7 +18,13 @@ hasher.finalize(hash)
 
 ## Development
 
-Install [Scala](https://scala-lang.org) and [sbt](https://www.scala-sbt.org/), preferably using [Couriser](https://get-coursier.io/).
+You can use [`nix`](https://zero-to-nix.com/concepts/nix/) to launch a development shell, i.e.:
+
+```shell
+φ nix develop --command /bin/zsh
+```
+
+Alternatively, install [Scala](https://scala-lang.org) and [sbt](https://www.scala-sbt.org/), preferably using [Couriser](https://get-coursier.io/).
 
 ```shell
 φ sbt test
