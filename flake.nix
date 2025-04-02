@@ -2,7 +2,7 @@
   description = "Pure Scala port of the BLAKE3 reference implementation";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/master";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
