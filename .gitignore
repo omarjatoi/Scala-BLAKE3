@@ -31,3 +31,5 @@ metals.sbt
 .idea_modules
 /.worksheet/
 .scala-build
+
+.direnv/
