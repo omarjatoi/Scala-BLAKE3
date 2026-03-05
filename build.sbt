@@ -1,4 +1,4 @@
-val scala3Version = "3.6.4"
+val scala3Version = "3.8.1"
 
 lazy val root = project
   .in(file("."))
@@ -20,7 +20,7 @@ lazy val root = project
       "Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")
     ),
     libraryDependencies ++= Seq(
-      "org.scalameta" %% "munit" % "1.0.0" % Test,
-      "com.lihaoyi" %% "upickle" % "4.1.0" % Test
+      "org.scalameta" %% "munit" % "1.2.2" % Test,
+      "com.lihaoyi" %% "upickle" % "4.4.3" % Test
     )
   )
