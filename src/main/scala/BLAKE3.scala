@@ -19,10 +19,10 @@ package com.omarjatoi
   */
 object Blake3:
   // Constants
-  val OutLen: Int = 32
-  val KeyLen: Int = 32
-  val BlockLen: Int = 64
-  val ChunkLen: Int = 1024
+  inline val OutLen = 32
+  inline val KeyLen = 32
+  inline val BlockLen = 64
+  inline val ChunkLen = 1024
 
   // Flags as opaque type aliases for more type safety
   opaque type Flag = Int
@@ -35,11 +35,11 @@ object Blake3:
     val DeriveKeyContext: Flag = 1 << 5
     val DeriveKeyMaterial: Flag = 1 << 6
 
-    extension (f: Flag) def |(other: Flag): Flag = f | other
+    extension (f: Flag)
+      def |(other: Flag): Flag = (f: Int) | (other: Int)
+      def toInt: Int = f
 
-    given Conversion[Flag, Int] = identity
-
-  export Flag._
+  export Flag.*
 
   // IV constants
   val IV: IArray[Int] = IArray(
@@ -62,14 +62,13 @@ object Blake3:
       mx: Int,
       my: Int
   ): Unit =
-    // Important: Use wrapping addition to match the original implementation
-    state(a) = (state(a) + state(b)).&(0xffffffff) + mx
+    state(a) = state(a) + state(b) + mx
     state(d) = Integer.rotateRight(state(d) ^ state(a), 16)
-    state(c) = (state(c) + state(d)).&(0xffffffff)
+    state(c) = state(c) + state(d)
     state(b) = Integer.rotateRight(state(b) ^ state(c), 12)
-    state(a) = (state(a) + state(b)).&(0xffffffff) + my
+    state(a) = state(a) + state(b) + my
     state(d) = Integer.rotateRight(state(d) ^ state(a), 8)
-    state(c) = (state(c) + state(d)).&(0xffffffff)
+    state(c) = state(c) + state(d)
     state(b) = Integer.rotateRight(state(b) ^ state(c), 7)
 
   /** Applies one round of the BLAKE3 compression function. */
@@ -118,7 +117,7 @@ object Blake3:
       counterLow,
       counterHigh,
       blockLen,
-      flags
+      flags.toInt
     )
     val block = blockWords.clone()
 
